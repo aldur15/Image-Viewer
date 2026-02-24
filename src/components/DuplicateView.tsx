@@ -91,8 +91,10 @@ export function DuplicateView({ duplicates, onDelete }: DuplicateViewProps) {
       ) : (
         duplicates.map((group, groupIndex) => {
           const original = getHighestResImage(group);
-          // sort by creation date so oldest (most likely the original) shows up first
+          // sort by creation date, then move the original to the front so it's always first
           const sorted = [...group].sort((a, b) => a.created_at - b.created_at);
+          const originalIndex = sorted.findIndex((img) => img.path === original.path);
+          if (originalIndex > 0) sorted.unshift(sorted.splice(originalIndex, 1)[0]);
 
           return (
             <section key={groupIndex} style={{ marginBottom: 32 }}>
