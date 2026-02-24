@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { t } from "../theme";
 
 interface FilterBarProps {
   year: string;
@@ -14,71 +15,114 @@ export function FilterBar({
   year, onYearChange, selectedYears, onYearToggle,
   availableYears, groupByYear, onGroupByYearChange,
 }: FilterBarProps) {
-  // keep a local copy so the input stays responsive while typing
   const [localYear, setLocalYear] = useState(year ?? "");
 
-  // sync back up if the parent resets the year externally
   useEffect(() => { setLocalYear(year ?? ""); }, [year]);
 
   const handleYearChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // strip non-numeric chars so users can't type garbage into the year field
-    const value = e.target.value.replace(/\D/g, "");
+    const value = e.target.value.replace(/\D/g, "").slice(0, 4);
     setLocalYear(value);
     onYearChange(value);
   };
 
   const toggleGroupByYear = () => {
-    const newValue = !groupByYear;
-    onGroupByYearChange(newValue);
-    // clear the manual year filter when switching to group mode, they conflict
-    if (!groupByYear && localYear) {
-      setLocalYear("");
-      onYearChange("");
-    }
+    const next = !groupByYear;
+    onGroupByYearChange(next);
+    if (next && localYear) { setLocalYear(""); onYearChange(""); }
   };
 
+  // nothing to show if no years available yet
+  if (availableYears.length === 0) return null;
+
+  const hasActiveFilter = selectedYears.length > 0 || localYear.trim() !== "";
+
   return (
-    <div style={{ marginBottom: 16, display: "flex", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
-      <div>
-        <label>
-          Year:{" "}
-          <input
-            type="text"
-            inputMode="numeric"
-            placeholder="e.g. 2021"
-            value={localYear}
-            onChange={handleYearChange}
-            disabled={groupByYear}
-            style={{ width: 100, padding: "4px 8px", border: "1px solid #ddd", borderRadius: 4 }}
-          />
-        </label>
-      </div>
+    <div style={{
+      marginBottom: 18,
+      padding: "12px 14px",
+      background: t.surface,
+      border: `1px solid ${t.border}`,
+      borderRadius: 10,
+      display: "flex", flexWrap: "wrap",
+      alignItems: "center", gap: "10px 16px",
+    }}>
 
-      {/* scrollable checkbox list, capped at 120px so it doesn't take over the layout */}
-      <div style={{
-        display: "flex", flexDirection: "column", gap: 4,
-        maxHeight: 120, overflowY: "auto",
-        border: "1px solid #ddd", borderRadius: 4, padding: 8, background: "#f8f9fa"
-      }}>
-        <label style={{ fontSize: "0.9em", fontWeight: "bold", marginBottom: 4 }}>Filter by Year:</label>
+      {/* ── Year chips ── */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, flex: 1 }}>
+        {/* "All" chip — clears both text filter and year selection */}
+        <button
+          className={`year-chip ${selectedYears.length === 0 && !localYear ? "active" : ""}`}
+          onClick={() => { onYearChange(""); setLocalYear(""); selectedYears.slice().forEach(y => onYearToggle(y)); }}
+          disabled={groupByYear}
+          style={{ opacity: groupByYear ? 0.4 : 1 }}
+        >
+          All
+        </button>
+
         {availableYears.map((y) => (
-          <label key={y} style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: "0.85em" }}>
-            <input
-              type="checkbox"
-              checked={selectedYears.includes(y)}
-              onChange={() => onYearToggle(y)}
-              disabled={groupByYear} // checkboxes don't make sense when grouping is on
-            />
+          <button
+            key={y}
+            className={`year-chip ${selectedYears.includes(y) ? "active" : ""}`}
+            onClick={() => !groupByYear && onYearToggle(y)}
+            disabled={groupByYear}
+            style={{ opacity: groupByYear ? 0.4 : 1 }}
+          >
             {y}
-          </label>
+          </button>
         ))}
-        {availableYears.length === 0 && <span>No years available</span>}
       </div>
 
-      <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-        <input type="checkbox" checked={groupByYear} onChange={toggleGroupByYear} />
-        Group by Year
+      {/* ── Divider ── */}
+      <div style={{ width: 1, height: 20, background: t.border2, flexShrink: 0 }} />
+
+      {/* ── Year text search ── */}
+      <input
+        type="text"
+        inputMode="numeric"
+        value={localYear}
+        onChange={handleYearChange}
+        placeholder="Search year…"
+        disabled={groupByYear || selectedYears.length > 0}
+        style={{
+          width: 100, padding: "5px 10px",
+          background: t.surface2, color: t.text,
+          border: `1px solid ${localYear ? t.accentBorder : t.border2}`,
+          borderRadius: 8, fontSize: 12, fontFamily: "inherit",
+          outline: "none", transition: "border-color 0.15s ease",
+          opacity: (groupByYear || selectedYears.length > 0) ? 0.4 : 1,
+        }}
+      />
+
+      {/* ── Divider ── */}
+      <div style={{ width: 1, height: 20, background: t.border2, flexShrink: 0 }} />
+
+      {/* ── Group by year toggle ── */}
+      <label style={{ display: "flex", alignItems: "center", gap: 8,
+        cursor: "pointer", userSelect: "none", flexShrink: 0 }}>
+        <div className={`toggle-track ${groupByYear ? "on" : ""}`} onClick={toggleGroupByYear}>
+          <div className="toggle-knob" />
+        </div>
+        <span style={{ fontSize: 12, color: t.text2 }}>Group by year</span>
       </label>
+
+      {/* ── Clear button ── */}
+      {hasActiveFilter && !groupByYear && (
+        <button
+          style={{
+            fontSize: 11, color: t.text3, background: "none", border: "none",
+            cursor: "pointer", padding: "2px 4px", fontFamily: "inherit",
+            transition: "color 0.15s ease",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = t.text2)}
+          onMouseLeave={(e) => (e.currentTarget.style.color = t.text3)}
+          onClick={() => {
+            setLocalYear(""); onYearChange("");
+            selectedYears.slice().forEach((y) => onYearToggle(y));
+          }}
+        >
+          Clear ×
+        </button>
+      )}
     </div>
   );
 }

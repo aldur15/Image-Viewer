@@ -1,79 +1,139 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ImageInfo } from "../App";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { ImageInfo } from "../App";
+import { t } from "../theme";
 
 export function ImageCard({ image }: { image: ImageInfo }) {
   const [hovered, setHovered] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
-  // prefer exif date if available, fall back to file creation time
   const getDate = () => {
     const ts = image.exif?.date ?? image.created_at;
-    if (!ts) return "Unknown date";
-    return new Date(ts * 1000).toLocaleDateString();
+    if (!ts) return null;
+    return new Date(ts * 1000).toLocaleDateString(undefined, {
+      year: "numeric", month: "short", day: "numeric",
+    });
   };
 
-  // keeping this simple, don't need anything fancier than KB/MB for now
   const formatSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + " B";
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + " KB";
     return (bytes / (1024 * 1024)).toFixed(1) + " MB";
   };
 
   const handleOpen = () => {
-    // let the OS decide which app to open it with
     invoke("open_image", { path: image.path }).catch(console.error);
   };
 
-  // tauri needs this to load local files in the webview
   const src = convertFileSrc(image.path);
+  const date = getDate();
+  const hasDimensions = image.exif?.width && image.exif?.height;
 
   return (
     <div
+      className="img-card"
       onClick={handleOpen}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      title="Click to open in system viewer"
-      style={{
-        border: "1px solid #ddd",
-        borderRadius: 8,
-        overflow: "hidden",
-        background: "white",
-        cursor: "pointer",
-        transform: hovered ? "translateY(-2px)" : "none",
-        // slightly stronger shadow on hover to give a "lift" effect
-        boxShadow: hovered ? "0 4px 12px rgba(0,0,0,0.15)" : "0 1px 3px rgba(0,0,0,0.08)",
-        transition: "transform 0.15s ease, box-shadow 0.15s ease",
-      }}
+      title={image.path}
     >
-      <img
-        src={src}
-        alt={image.name}
-        style={{ width: "100%", height: 200, objectFit: "cover", display: "block" }}
-        loading="lazy" // lazy load since there can be a lot of these
-      />
-      <div style={{ padding: 12 }}>
-        {/* truncate long filenames with ellipsis */}
-        <div
-          style={{
-            fontSize: "0.9em", fontWeight: "bold", marginBottom: 4,
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}
-          title={image.name}
-        >
+      {/* ── Thumbnail ── */}
+      <div style={{ position: "relative", width: "100%", paddingBottom: "66%", background: t.surface2 }}>
+        {!imgError ? (
+          <img
+            src={src}
+            alt={image.name}
+            onError={() => setImgError(true)}
+            loading="lazy"
+            style={{
+              position: "absolute", inset: 0,
+              width: "100%", height: "100%",
+              objectFit: "cover", display: "block",
+            }}
+          />
+        ) : (
+          <div style={{
+            position: "absolute", inset: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: t.text3,
+          }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+          </div>
+        )}
+
+        {/* Hover overlay with "open" hint */}
+        <div style={{
+          position: "absolute", inset: 0,
+          background: "rgba(0,0,0,0.45)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          opacity: hovered ? 1 : 0,
+          transition: "opacity 0.15s ease",
+        }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 5,
+            background: "rgba(255,255,255,0.12)", backdropFilter: "blur(6px)",
+            padding: "5px 12px", borderRadius: 20,
+            fontSize: 11, fontWeight: 600, color: "#fff",
+            border: "1px solid rgba(255,255,255,0.15)",
+          }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+              <polyline points="15 3 21 3 21 9"/>
+              <line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+            Open
+          </div>
+        </div>
+      </div>
+
+      {/* ── Info panel ── */}
+      <div style={{ padding: "10px 12px" }}>
+        {/* Filename */}
+        <div style={{
+          fontSize: 12, fontWeight: 600, color: t.text,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          marginBottom: 5,
+        }} title={image.name}>
           {image.name}
         </div>
-        <div style={{ fontSize: "0.8em", color: "#666" }}>
-          <div>{getDate()}</div>
-          <div>{formatSize(image.size)}</div>
-          {/* dimensions are only in exif so not always available */}
-          {image.exif?.width && (
-            <div>{image.exif.width} × {image.exif.height}</div>
-          )}
-          {image.exif?.model && (
-            <div style={{ marginTop: 4, fontStyle: "italic" }}>{image.exif.model}</div>
-          )}
+
+        {/* Meta row */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
+          <span style={{ fontSize: 11, color: t.text2 }}>
+            {date ?? "—"}
+          </span>
+          <span style={{ fontSize: 11, color: t.text3 }}>
+            {formatSize(image.size)}
+          </span>
         </div>
+
+        {/* Dimensions + camera model */}
+        {(hasDimensions || image.exif?.model) && (
+          <div style={{ marginTop: 5, display: "flex", flexWrap: "wrap", gap: "3px 8px" }}>
+            {hasDimensions && (
+              <span style={{
+                fontSize: 10, color: t.text3,
+                background: t.surface2, padding: "1px 6px",
+                borderRadius: 4, border: `1px solid ${t.border}`,
+              }}>
+                {image.exif!.width} × {image.exif!.height}
+              </span>
+            )}
+            {image.exif?.model && (
+              <span style={{
+                fontSize: 10, color: t.text3,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                maxWidth: "100%",
+              }}>
+                {image.exif.model}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
